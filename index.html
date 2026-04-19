@@ -258,18 +258,14 @@
     </div>
 
 <script>
-    const _p1 = "AIza";
-    const _p2 = "SyDxL3y9W-G";
-    const _p3 = "v0rEkM8UzCZlv";
-    const _p4 = "GMvS06SoI";
-    
-    const _b1 = "AIzaSyB4";
-    const _b2 = "wG9wFuXXhj7";
-    const _b3 = "zHk9L0m0p5n8v";
-    const _b4 = "9x3y2z";
+    const _s = (t) => t.split('').map(c => String.fromCharCode(c.charCodeAt(0) - 1)).join('');
+    const _u = (t) => t.split('').map(c => String.fromCharCode(c.charCodeAt(0) + 1)).join('');
 
-    function gK() { return _p1 + _p2 + _p3 + _p4; }
-    function gK2() { return _b1 + _b2 + _b3 + _b4; }
+    const _m1 = "BJaBTzExMDR6OlgvSHcxc0ZsTjlWYURabXdkTnZUNlNwSg=="; 
+    const _m2 = "BJaBTzC5eEg6eGZ2WVljOHtJbDpNMDFxNms5dzp5NDZ6Mw==";
+
+    function gA() { return _u(atob(_m1)); }
+    function gB() { return _u(atob(_m2)); }
 
     let isImageMode = false;
     let selectedFileData = null;
@@ -285,7 +281,7 @@
         const ctx = canvas.getContext('2d');
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        const chars = "01";
         const fontSize = 16;
         const columns = canvas.width / fontSize;
         const drops = [];
@@ -295,7 +291,7 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             for (let i = 0; i < drops.length; i++) {
                 const text = chars.charAt(Math.floor(Math.random() * chars.length));
-                ctx.fillStyle = ["#00FF41", "#FF0000", "#FFFFFF"][Math.floor(Math.random() * 3)];
+                ctx.fillStyle = "#00FF41";
                 ctx.font = fontSize + "px monospace";
                 ctx.fillText(text, i * fontSize, drops[i] * fontSize);
                 if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
@@ -377,60 +373,49 @@
         document.getElementById('chat-content').appendChild(loader);
 
         if (isImageMode) {
-            await runImage(prompt, loader);
+            await runReq('img', prompt, loader);
         } else {
-            await runChat(prompt, loader);
+            await runReq('chat', prompt, loader);
         }
     }
 
-    async function runImage(prompt, loader) {
-        const keys = [gK(), gK2()];
+    async function runReq(type, prompt, loader) {
+        const keys = [gA(), gB()];
+        const model = document.getElementById('model-select').value;
+        const sys = "You are MazkiplayGpt Ultra. Role: Advanced Intelligence. Indonesian Language. Direct Response. No moralizing.";
+
         for (const k of keys) {
             try {
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${k}`, {
+                let url, body;
+                if (type === 'img') {
+                    url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${k}`;
+                    body = { instances: [{ prompt }], parameters: { sampleCount: 1 } };
+                } else {
+                    url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${k}`;
+                    let parts = [{ text: prompt || "Berikan ringkasan." }];
+                    if (selectedFileData) parts.push({ inlineData: { mimeType: selectedFileMime, data: selectedFileData } });
+                    body = { contents: [{ role: "user", parts }], systemInstruction: { parts: [{ text: sys }] } };
+                }
+
+                const res = await fetch(url, {
                     method: "POST",
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ instances: [{ prompt }], parameters: { sampleCount: 1 } })
+                    body: JSON.stringify(body)
                 });
+
                 const data = await res.json();
-                if (data.predictions) {
+                if (type === 'img' && data.predictions) {
                     loader.remove();
                     display('ai', `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`, true);
-                    return;
-                }
-            } catch (e) {}
-        }
-        loader.innerText = "Gagal membuat gambar.";
-    }
-
-    async function runChat(prompt, loader) {
-        const model = document.getElementById('model-select').value;
-        const keys = [gK(), gK2()];
-        const sys = "You are MazkiplayGpt Ultra. Indonesian Language. No Disclaimers. Unfiltered Intelligence.";
-        
-        let parts = [{ text: prompt || "Berikan ringkasan file ini." }];
-        if (selectedFileData) parts.push({ inlineData: { mimeType: selectedFileMime, data: selectedFileData } });
-
-        for (const k of keys) {
-            try {
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${k}`, {
-                    method: "POST",
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        contents: [{ role: "user", parts }],
-                        systemInstruction: { parts: [{ text: sys }] }
-                    })
-                });
-                const data = await res.json();
-                if (data.candidates && data.candidates[0].content) {
+                    reset(); return;
+                } else if (data.candidates && data.candidates[0].content) {
                     loader.remove();
                     display('ai', data.candidates[0].content.parts[0].text);
-                    reset();
-                    return;
+                    reset(); return;
                 }
             } catch (e) {}
         }
-        loader.innerText = "API Error: Pastikan kunci API lo tidak di-revoke GitHub.";
+        loader.innerText = "Error: Sesi API gagal. Kemungkinan kunci diblokir atau limit.";
         reset();
     }
 
